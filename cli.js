@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+if (process.argv.indexOf('-v')!=-1 || process.argv.indexOf('--version')!=-1) {
+  const pjson = require('./package.json');
+  console.log(pjson.version);
+  return;
+}
+
 const fs = require('fs');
 
 const src = fs.readFileSync(0, 'utf-8').replace(/\/\/[^\n]*/g, '');
