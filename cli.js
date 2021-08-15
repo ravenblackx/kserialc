@@ -161,9 +161,13 @@ for (let match; pos != -1 && (match = src.substr(pos).match(nextCmdRE)) !== null
    console.log('  }');
    
    console.log(`  static deserialize(src: Uint8Array): ${name} {`);
-   console.log(`    return new ${name}({`);
-   for (const deserialize of deserializes) {
-     console.log(`      ${deserialize},`);
+   if (deserializes.length > 0) {
+     console.log(`    return new ${name}({`);
+     for (const deserialize of deserializes) {
+       console.log(`      ${deserialize},`);
+     }
+   } else {
+     console.log(`    return new ${name}();`;
    }
    console.log('    });');
    console.log('  }');
