@@ -62,6 +62,11 @@ The other basic type. Takes up 4 bytes in the base table even if the string
 is empty, plus 4 bytes in the dynamic area for the length if nonzero,
 plus however many bytes it takes to represent the string in utf8.
 
+`bool`
+
+A mostly basic type. Every 8 or subset of 8 bools in a message take up 1
+byte in the base table. Maps to `boolean` in typescript.
+
 `your_enum_type`
 
 Takes up the number of bytes in the base table as selected for the enum type.

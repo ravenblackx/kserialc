@@ -19,8 +19,8 @@ const enumTypes = {};
 const tableTypes = {};
 const enumValues = {};
 const commonTypeSizes = {'byte':1, 'uint16':2, 'uint32':4, 'int16': 2, 'int32': 4, 'string':4, 'any':4};
-const commonTypeMappings = {'byte':'number', 'uint16':'number', 'uint32':'number','int16':'number','int32':'number','any':'KSerializableAny|null','string':'string'};
-const commonTypeDefaults = {'byte':'0', 'uint16': '0', 'uint32': '0', 'int16': '0', 'int32': '0', 'string': "''"};
+const commonTypeMappings = {'byte':'number', 'uint16':'number', 'uint32':'number','int16':'number','int32':'number','any':'KSerializableAny|null','string':'string','bool':'boolean'};
+const commonTypeDefaults = {'byte':'0', 'uint16': '0', 'uint32': '0', 'int16': '0', 'int32': '0', 'string': "''", 'bool': 'false'};
 
 function cap(s) {
  return s.charAt(0).toUpperCase()+s.substring(1);
@@ -71,6 +71,11 @@ function deserializeFor(type,name,offset) {
  if (commonTypeSizes[type]) return `${name}: deserialize${cap(type)}(src, ${offset})`;
  if (type.endsWith('[]')) return `${name}: deserializeSubArray(${type.substring(0, type.length - 2)}.deserialize, src, ${offset}) as ${type}`;
  return `${name}: deserializeSub(${type}.deserialize, src, ${offset}) as ${type}`;
+}
+
+function serializeBoolGroup(bools,offset) {
+ const entries = bools.map((e, i) => `((this.${e}?1:0)${i==0?'':`<<${i}`})`);
+ return `serializeByte(dest, ${offset}, ${entries.join('+')});`;
 }
 
 console.log(`import {KSerializableAny,KSerializable,register,
@@ -131,20 +136,32 @@ for (let match; pos != -1 && (match = src.substr(pos).match(nextCmdRE)) !== null
    if (namesWithDefaults.length > 0) {
      console.log(`  constructor({${namesWithDefaults.join(',')}}:{${namesWithTypes.join(',')}}={}) {${names.map((n) => `this.${n}=${n};`).join(' ')}}`);
    }
-   const typeLengths = types.map(typeLength);
-   const baseLength = typeLengths.reduce((a, b) => a+b, 0);
-   const serializeExtraLengths = [baseLength];
+   let baseLength = 0;
    const serializes = [];
    const deserializes = [];
+   const bools = [];
+   const serializeExtraLengths = [0];
    let o = 0;
    for (let i = 0; i < types.length; i++) {
-    serializes.push(serializeFor(types[i], names[i], o));
-    deserializes.push(deserializeFor(types[i], names[i], o));
-    o += typeLengths[i];
+    if (types[i] == 'bool') {
+     if (bools.length == 0 || bools[bools.length-1].length==8) {
+      bools.push([]);
+     }
+     const sub = bools[bools.length-1];
+     sub.push(names[i]);
+     continue;
+    }
+    serializes.push(serializeFor(types[i], names[i], baseLength));
+    deserializes.push(deserializeFor(types[i], names[i], baseLength));
+    baseLength += typeLength(types[i]);
     const fn = serializeLengthFor(types[i], names[i]);
     if (fn === null) continue;
     serializeExtraLengths.push(fn);
    }
+   if (bools.length > 0) {
+    baseLength += bools.length;
+   }
+   serializeExtraLengths[0] = baseLength;
    console.log(`  get serializeLength(): number { return ${serializeExtraLengths.join('+')}; }`);
    console.log('  serialize(dest: Uint8Array): number {');
    if (serializes.some((s) => s.includes('offset +='))) {
@@ -152,6 +169,9 @@ for (let match; pos != -1 && (match = src.substr(pos).match(nextCmdRE)) !== null
    }
    for (const serialize of serializes) {
     console.log(`    ${serialize}`);
+   }
+   for (let i = 0; i < bools.length; i++) {
+    console.log(`    ${serializeBoolGroup(bools[i], baseLength-i-1)}`);
    }
    if (serializes.some((s) => s.includes('offset +='))) {
     console.log(`    return offset;`);
@@ -161,15 +181,28 @@ for (let match; pos != -1 && (match = src.substr(pos).match(nextCmdRE)) !== null
    console.log('  }');
    
    console.log(`  static deserialize(src: Uint8Array): ${name} {`);
+   if (bools.length > 0) {
+     for (let i = 0; i < bools.length; i++) {
+       const boolGroup = bools[i];
+       if (boolGroup.length > 1) {
+         console.log(`    const bools${i} = deserializeByte(src, ${baseLength-i-1});`);
+         for (let j = 0; j < boolGroup.length; j++) {
+           deserializes.push(`${boolGroup[j]}: !!((bools${i}>>${j})&1)`);
+         }
+       } else {
+         deserializes.push(`${boolGroup[0]}: !!deserializeByte(src, ${baseLength-i-1})`);
+       }
+     }
+   }
    if (deserializes.length > 0) {
      console.log(`    return new ${name}({`);
      for (const deserialize of deserializes) {
        console.log(`      ${deserialize},`);
      }
+     console.log('    });');
    } else {
-     console.log(`    return new ${name}();`;
+     console.log(`    return new ${name}();`);
    }
-   console.log('    });');
    console.log('  }');
    console.log('}');
    console.log(`register('${id}', ${name}.deserialize);\n`);
