@@ -122,7 +122,9 @@ for (let match; pos != -1 && (match = src.substr(pos).match(nextCmdRE)) !== null
     namesWithTypes.push(`${nameTypeMatch[1]}?:${localTypes[localTypes.length-1]}`);
     console.log(`  ${nameTypeMatch[1]}: ${localTypes[localTypes.length-1]};`);
    }
-   console.log(`  constructor({${namesWithDefaults.join(',')}}:{${namesWithTypes.join(',')}}={}) {${names.map((n) => `this.${n}=${n};`).join(' ')}}`);
+   if (namesWithDefaults.length > 0) {
+     console.log(`  constructor({${namesWithDefaults.join(',')}}:{${namesWithTypes.join(',')}}={}) {${names.map((n) => `this.${n}=${n};`).join(' ')}}`);
+   }
    const typeLengths = types.map(typeLength);
    const baseLength = typeLengths.reduce((a, b) => a+b, 0);
    const serializeExtraLengths = [baseLength];
